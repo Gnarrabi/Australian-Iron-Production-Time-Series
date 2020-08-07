@@ -1,0 +1,74 @@
+---
+title: "Time Series Side Project"
+author: "Austin Ibarra"
+date: "8/7/2020"
+output: html_document
+---
+```{r, include = FALSE}
+require(tidyverse)
+require(astsa)
+```
+**Introduction**
+
+This report will be a time series analysis on the quarterly iron production in Australia (in tonnes) from March 1956 to September 1994. Iron ore mining and steel production is a staple in the Australian economy and a global asset. I am interested in the iron production of the country as a function of time and see how the series behaves and if I can forecast it accurately towards the future. 
+
+**Results & Discussion**
+
+I first wanted to see a general graph of the time series of the iron production in Australia. 
+
+```{r}
+iron <- read.csv("basic-quarterly-iron-production(1).csv")
+tsiron <- ts(iron, start = 1956, frequency = 4)
+plot(tsiron)
+```
+
+From figure 1, we see a general time series plot of the iron production plotted against time, from 1956 to 1994. We observe a steady increasing trend in production from 1954 to around 1972 where we see a jump in production that generally keeps a stagnant trend with cycling oscillations. This trend continues until a drop-in production begins in 1980 to about 1983, most likely due to the global steel crisis of 1980. The trend begins to pick back up from 1984 onwards with a steady increase with seasonal oscillations. 
+
+In order to begin modeling and analyzing the periodic components that make up the series, I begin transforming the data to make it a stationary time series. I control for the rising trend of the series through differencing and take an additional seasonal lag difference to account for the quarterly aspect of the data. I also take the log of the data to smooth out the large oscillations, most notably the steel crisis of 1980. The figure below depicts the stationary version of the series. 
+ 
+```{r}
+plot(diff(diff(log(tsiron)), 4))
+```
+
+To determine the order for the model of the series, I examine the ACF and PACF of the newly transformed series. 
+
+```{r}
+acf2(diff(diff(log(tsiron)), 4))
+```
+
+The ACF and PACF of the series both die after lag 1, which shows signs of an AR(1) and MA(1) process. Examining the seasonal lags, we see that the ACF dies after the first seasonal lag while the PACF tails off which depicts a SMA(1) or even (2) process. The cutoff points for the lags seem very close so we will try multiple models and select the one with the lowest AIC, significant p-values for the parameters, and normal residuals. 
+
+```{r}
+sarima(log(tsiron), 1,1,1,0,1,2,4)
+```
+
+After running several models, I came up with the SARIMA (1,1,1)x(0,1,2)4 model that I believe does an acceptable job of modeling the data. The ACF of residuals seem properly bounded, the p-values for the Ljung-Box statistic indicate normality, the p-values for the estimates are all significant, and the AIC was the lowest amongst all other models I ran. The qqplot doesn’t properly bound all the residuals within the standard error, though this was the best model that had the most accuracy compared with the rest. Overall, the model is the most accurate while keeping the parsimonious principle in mind to keep from overfitting the data.
+
+I also want to examine a periodogram of the series to determine which frequencies dominate the periods that make up the series. 
+ 
+```{r}
+mvspec(tsiron, main="Periodogram for Iron Production", col=rgb(.05,.6,.75), lwd=2, type="o", pch=20) 
+```
+
+The figure depicts a large spike to the left of the series. This shows that the series is dominated by slower oscillations, indicating that the phis that show the correlation between each consecutive point are highly correlated in the periods with little variation. This confirms our initial analysis of the first figure how the series trend is steadily increasing until 1980, then drops, then steadily increases again until 1994. 
+
+Next, we will use our model to forecast the next 12 quarters. 
+ 
+```{r}
+pred.tsiron <- sarima.for(log(tsiron), 12,1,1,1,0,1,2,4)
+predicted <- exp(pred.tsiron$pred)
+L <- predicted - 1.96*exp(pred.tsiron$se)
+U <- predicted + 1.96*exp(pred.tsiron$se)
+predicted
+```
+
+From our forecast, we see that the model does a reasonably good job in predicting the next 12 quarters with an increasingly upward trend. The standard error grows substantially larger showing how the uncertainty of the model as it goes farther into the future. 
+ 
+**Conclusion**
+Overall, I reached the goals set in the introduction through analysis of the time series regarding iron production in Australia, examining the periodic elements that dominate the series, SARIMA modeling of the data, and finally using the model to forecast 12 quarters into the future with moderate accuracy.
+
+
+
+
+
+
